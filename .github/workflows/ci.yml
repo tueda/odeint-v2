@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            toolset: gcc
+            compiler: g++
+          - os: ubuntu-latest
+            toolset: clang
+            compiler: clang++
+          - os: windows-latest
+            toolset: msvc
+            compiler: cl.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: main
+
+      - name: Checkout Boost
+        uses: actions/checkout@v2
+        with:
+          repository: boostorg/boost
+          path: boost
+
+      - name: Checkout Boost submodules
+        working-directory: boost
+        run: |
+          git submodule update --init --depth=1 tools/build
+          git submodule update --init --depth=1 libs/config
+          git submodule update --init --depth=1 tools/boostdep
+
+      - name: Prepare Boost (POSIX)
+        if: runner.os != 'Windows'
+        working-directory: boost
+        run: |
+          mkdir -p libs/numeric/odeint
+          cp -r $GITHUB_WORKSPACE/main/* libs/numeric/odeint
+          python3 tools/boostdep/depinst/depinst.py numeric/odeint
+          ./bootstrap.sh
+          ./b2 headers
+          echo "using ${{ matrix.toolset }} : : ${{ matrix.compiler }} ;" >user-config.jam
+
+      - name: Prepare Boost (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: boost
+        run: |
+          New-Item libs/numeric/odeint -ItemType Directory -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE/main | ForEach-Object { Copy-Item -Recurse $env:GITHUB_WORKSPACE/main/$_ libs/numeric/odeint }
+          python tools/boostdep/depinst/depinst.py numeric/odeint
+          ./bootstrap.bat
+          ./b2 headers
+          echo "using ${{ matrix.toolset }} : : ${{ matrix.compiler }} ;" | Out-File user-config.jam
+
+      - name: Checkout Eigen
+        run: |
+          git clone --depth 1 https://gitlab.com/libeigen/eigen.git
+
+      - name: Test
+        env:
+          BOOST_ROOT: ${{ github.workspace }}/boost
+          EIGEN_ROOT: ${{ github.workspace }}/eigen
+        working-directory: boost
+        run: |
+          ./b2 -j 4 libs/numeric/odeint libs/numeric/odeint/test_external/eigen toolset=${{ matrix.toolset }}
