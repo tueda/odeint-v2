@@ -41,10 +41,17 @@ struct extract_value_type<S , typename boost::disable_if< has_value_type<S> >::t
 };
 
 template< typename S >
-struct extract_value_type< S , typename boost::enable_if< has_value_type<S> >::type >
+struct extract_value_type< S , typename boost::enable_if< boost::mpl::and_< has_value_type<S>, boost::mpl::not_<boost::is_same<S, typename S::value_type> > > >::type >
 {
     // go down the value_type
     typedef typename extract_value_type< typename S::value_type >::type type;
+};
+
+template< typename S >
+struct extract_value_type< S , typename boost::enable_if< boost::mpl::and_< has_value_type<S>, boost::is_same<S, typename S::value_type> > >::type >
+{
+    // S::value_type is S itself, return S
+    typedef S type;
 };
 
 } } } }
