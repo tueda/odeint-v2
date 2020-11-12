@@ -6,6 +6,8 @@
 # http://www.boost.org/LICENSE_1_0.txt)
 
 
+import config : requires ;
+
 project
     : requirements 
       <define>BOOST_ALL_NO_LIB=1
@@ -36,12 +38,12 @@ exe stochastic_euler : stochastic_euler.cpp ;
 exe generation_functions : generation_functions.cpp ;
 exe heun : heun.cpp ;
 exe bind_member_functions : bind_member_functions.cpp ;
-exe bind_member_functions_cpp11 : bind_member_functions_cpp11.cpp : <cxxflags>-std=c++0x ;
-exe molecular_dynamics : molecular_dynamics.cpp : <cxxflags>-std=c++0x ;
-exe molecular_dynamics_cells : molecular_dynamics_cells.cpp : <cxxflags>-std=c++0x ;
+exe bind_member_functions_cpp11 : bind_member_functions_cpp11.cpp : [ requires cxx11_hdr_array cxx11_hdr_functional ] ;
+exe molecular_dynamics : molecular_dynamics.cpp : [ requires cxx11_hdr_random ] ;
+exe molecular_dynamics_cells : molecular_dynamics_cells.cpp : [ requires cxx11_hdr_random cxx11_hdr_tuple ] ;
 exe abm_precision : abm_precision.cpp ;
 exe integrate_times : integrate_times.cpp ;
-exe find_crossing : find_crossing.cpp : <cxxflags>-std=c++0x ;
+exe find_crossing : find_crossing.cpp : [ requires cxx11_hdr_array ] ;
 
 build-project multiprecision ;
 # build-project mtl ;
