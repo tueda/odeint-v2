@@ -16,20 +16,120 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-18.04
             toolset: gcc
-            compiler: g++
-          - os: ubuntu-latest
+            version: 4.8
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 4.9
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 5
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 6
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 7
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 8
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 9
+
+          - os: ubuntu-18.04
+            toolset: gcc
+            version: 10
+
+          - os: ubuntu-18.04
             toolset: clang
-            compiler: clang++
-          - os: windows-latest
+            version: 3.5
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 3.6
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 3.7
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 3.8
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 3.9
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 4.0
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 5.0
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 6.0
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 7
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 8
+
+          - os: ubuntu-18.04
+            toolset: clang
+            version: 9
+
+          - os: windows-2019
             toolset: msvc
-            compiler: cl.exe
+            version: 19
+
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
         with:
           path: main
+
+      - name: Install (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          case ${{ matrix.os }}-${{ matrix.toolset }} in
+            ubuntu-18.04-gcc)
+              case ${{ matrix.version }} in
+                4.8|5|6)
+                  sudo apt-get install -y g++-${{ matrix.version }}
+                  ;;
+                4.9)
+                  sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ xenial main'
+                  sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ xenial universe'
+                  sudo apt-get install -y g++-${{ matrix.version }}
+              esac
+              ;;
+            ubuntu-18.04-clang)
+              case ${{ matrix.version }} in
+                3.9|4.0|5.0|7)
+                  sudo apt-get install -y clang-${{ matrix.version }}
+                  ;;
+                3.5|3.6|3.7|3.8)
+                  sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ xenial main'
+                  sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ xenial universe'
+                  sudo apt-get install -y clang-${{ matrix.version }}
+                  ;;
+              esac
+              ;;
+          esac
 
       - name: Checkout Boost
         uses: actions/checkout@v2
@@ -51,9 +151,13 @@ jobs:
           mkdir -p libs/numeric/odeint
           cp -r $GITHUB_WORKSPACE/main/* libs/numeric/odeint
           python3 tools/boostdep/depinst/depinst.py numeric/odeint
+          case ${{ matrix.os }}-${{ matrix.toolset }} in
+            ubuntu-18.04-clang)
+              echo "using ${{ matrix.toolset }} : ${{ matrix.version }} : clang++-${{ matrix.version }} ;" >user-config.jam
+              ;;
+          esac
           ./bootstrap.sh
           ./b2 headers
-          echo "using ${{ matrix.toolset }} : : ${{ matrix.compiler }} ;" >user-config.jam
 
       - name: Prepare Boost (Windows)
         if: runner.os == 'Windows'
@@ -63,13 +167,29 @@ jobs:
           New-Item libs/numeric/odeint -ItemType Directory -ErrorAction SilentlyContinue
           Get-ChildItem -Path $env:GITHUB_WORKSPACE/main | ForEach-Object { Copy-Item -Recurse $env:GITHUB_WORKSPACE/main/$_ libs/numeric/odeint }
           python tools/boostdep/depinst/depinst.py numeric/odeint
+          echo "using msvc : ${{ matrix.version }} : cl.exe ;" | Out-File user-config.jam
           ./bootstrap.bat
           ./b2 headers
-          echo "using ${{ matrix.toolset }} : : ${{ matrix.compiler }} ;" | Out-File user-config.jam
 
       - name: Checkout Eigen
         run: |
           git clone --depth 1 https://gitlab.com/libeigen/eigen.git
+
+      - name: Debug (POSIX)
+        if: runner.os != 'Windows'
+        working-directory: boost
+        run: |
+          g++ --version
+          clang++ --version
+          cat user-config.jam || echo empty
+
+      - name: Debug
+        env:
+          BOOST_ROOT: ${{ github.workspace }}/boost
+          EIGEN_ROOT: ${{ github.workspace }}/eigen
+        working-directory: boost
+        run: |
+          ./b2 -n libs/numeric/odeint libs/numeric/odeint/test_external/eigen toolset=${{ matrix.toolset }}-${{ matrix.version }}
 
       - name: Test
         env:
@@ -77,4 +197,4 @@ jobs:
           EIGEN_ROOT: ${{ github.workspace }}/eigen
         working-directory: boost
         run: |
-          ./b2 -j 4 libs/numeric/odeint libs/numeric/odeint/test_external/eigen toolset=${{ matrix.toolset }}
+          ./b2 -j 4 libs/numeric/odeint libs/numeric/odeint/test_external/eigen toolset=${{ matrix.toolset }}-${{ matrix.version }}
